@@ -1,275 +1,359 @@
-<!DOCTYPE html>
-<html lang="mn">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Гүйцэтгэлийн үнэлгээ - 9-р анги (Орос хэл)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-        body { font-family: 'Roboto', sans-serif; background-color: #f3f4f6; user-select: none; }
-        .option-card:hover { background-color: #f0f7ff; transform: translateY(-1px); }
-        .correct { background-color: #d1fae5 !important; border-color: #10b981 !important; }
-        .incorrect { background-color: #fee2e2 !important; border-color: #ef4444 !important; }
-        .modal { backdrop-filter: blur(5px); }
-        #warning-overlay { display: none; }
-    </style>
-</head>
-<body class="p-2 md:p-8">
-    <div id="app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden relative">
-        <!-- Anti-cheat Warning Overlay -->
-        <div id="warning-overlay" class="fixed inset-0 bg-red-600 bg-opacity-90 z-50 flex flex-col items-center justify-center text-white p-6 text-center">
-            <h2 class="text-4xl font-bold mb-4">АНХААРУУЛГА!</h2>
-            <p class="text-xl mb-6">Тест ажиллаж байх явцад өөр цонх руу шилжих хориотой. Таны үйлдлийг тэмдэглэж байна.</p>
-            <button onclick="resumeQuiz()" class="bg-white text-red-600 px-8 py-3 rounded-full font-bold">БУЦАХ</button>
-        </div>
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, query, doc, setDoc } from 'firebase/firestore';
+import { User, ShieldAlert, Timer, ChevronRight, ChevronLeft, LogIn, BarChart3, CheckCircle2, XCircle } from 'lucide-react';
 
-        <!-- Header -->
-        <div class="bg-blue-700 p-6 text-white">
-            <div class="flex justify-between items-center">
+// Firebase configuration
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'russian-test-9';
+
+const QUESTIONS = [
+  { id: 1, q: "Задание 1. Выберите правильный вариант: «Я провожу каникулы ... деревне у дедушки».", options: ["в", "на", "у", "к"], correct: 0, cat: "Хэлзүй" },
+  { id: 2, q: "«Каждый день я ... в озере».", options: ["купаться", "купаюсь", "купается", "купаются"], correct: 1, cat: "Хэлзүй" },
+  { id: 3, q: "Выберите антоним к слову «Раннее» (утро):", options: ["холодное", "позднее", "красивое", "тёплое"], correct: 1, cat: "Үгсийн сан" },
+  { id: 4, q: "Задание 2. Мой брат хочет стать ...", options: ["врачом", "врач", "врача", "врачу"], correct: 0, cat: "Мэргэжил" },
+  { id: 5, q: "Программист создаёт компьютерные ...", options: ["программы", "программа", "программу", "программ"], correct: 0, cat: "Мэргэжил" },
+  { id: 6, q: "— Покажите, пожалуйста, этот торт. — ...", options: ["Вот, возьмите.", "Я не знаю.", "Это мой друг.", "Завтра праздник."], correct: 0, cat: "Харилцан яриа" },
+  { id: 7, q: "— Где я могу заплатить? — ...", options: ["В кассе.", "На улице.", "В библиотеке.", "В школе."], correct: 0, cat: "Харилцан яриа" },
+  { id: 8, q: "В театре мы смотрели интересный ...", options: ["спектакль", "урок", "завтрак", "карандаш"], correct: 0, cat: "Соёл" },
+  { id: 9, q: "Кто играет главную ... в этом фильме?", options: ["роль", "кино", "театр", "сцену"], correct: 0, cat: "Кино" },
+  { id: 10, q: "Лес даёт нам чистый ...", options: ["воздух", "воду", "хлеб", "машину"], correct: 0, cat: "Байгаль" },
+  { id: 11, q: "Вода имеет большое ... для жизни человека.", options: ["значение", "место", "время", "дело"], correct: 0, cat: "Байгаль" },
+  { id: 12, q: "Вчера папа ... поздно с работы.", options: ["пришёл", "пришла", "пришли", "прийти"], correct: 0, cat: "Хэлзүй" },
+  { id: 13, q: "Мы ... классическую музыку.", options: ["слушаем", "слушаю", "слушаешь", "слушает"], correct: 0, cat: "Хэлзүй" },
+  { id: 14, q: "Чем увлекается Дмитрий? (Он любит чинить приборы)", options: ["Спортом", "Техникой", "Музыкой", "Танцами"], correct: 1, cat: "Эх" },
+  { id: 15, q: "Где были очки? (Она искала везде, а они были на носу)", options: ["В сумке", "На столе", "На носу", "На полке"], correct: 2, cat: "Эх" },
+  { id: 16, q: "Мы занимаемся русск... язык...", options: ["-им, -ом", "-ий, -ом", "-им, -о", "-ий, -о"], correct: 0, cat: "Хэлзүй" },
+  { id: 17, q: "Найдите лишнее слово:", options: ["Учитель", "Врач", "Повар", "Школа"], correct: 3, cat: "Үгсийн сан" },
+  { id: 18, q: "Какое сегодня число?", options: ["22-ое мая", "В 22 мая", "22-го май", "22-ой май"], correct: 0, cat: "Хэлзүй" },
+  { id: 19, q: "Где вы были в воскресенье?", options: ["Мы были в парке.", "Мы идем в парк.", "Мы любим парк.", "Это парк."], correct: 0, cat: "Хэлзүй" },
+  { id: 20, q: "Найдите ошибку:", options: ["Новая фильм", "Новый фильм", "Интересный фильм", "Старый фильм"], correct: 0, cat: "Хэлзүй" },
+  { id: 21, q: "Мой дедушка ... на пенсии.", options: ["находится", "есть", "был", "учится"], correct: 0, cat: "Нөхөх" },
+  { id: 22, q: "Он ... в деревне.", options: ["живёт", "работает", "жил", "гуляет"], correct: 0, cat: "Нөхөх" },
+  { id: 23, q: "Он очень ... трудиться.", options: ["любит", "любят", "люблю", "любишь"], correct: 0, cat: "Нөхөх" },
+  { id: 24, q: "У него ... большой сад.", options: ["есть", "был", "будет", "были"], correct: 0, cat: "Нөхөх" },
+  { id: 25, q: "Как называется столица России?", options: ["Москва", "Питер", "Иркутск", "Улан-Удэ"], correct: 0, cat: "Соёл" }
+];
+
+export default function App() {
+  const [view, setView] = useState('landing'); // landing, quiz, result, teacher
+  const [user, setUser] = useState(null);
+  const [studentName, setStudentName] = useState('');
+  const [currentQ, setCurrentQ] = useState(0);
+  const [answers, setAnswers] = useState(new Array(QUESTIONS.length).fill(null));
+  const [timeLeft, setTimeLeft] = useState(2400);
+  const [cheats, setCheats] = useState(0);
+  const [showWarning, setShowWarning] = useState(false);
+  const [teacherResults, setTeacherResults] = useState([]);
+  const [adminPass, setAdminPass] = useState('');
+
+  // 1. Auth logic
+  useEffect(() => {
+    const initAuth = async () => {
+      await signInAnonymously(auth);
+    };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  // 2. Anti-cheat window detection
+  useEffect(() => {
+    if (view !== 'quiz') return;
+
+    const handleBlur = () => {
+      setCheats(prev => {
+        const next = prev + 1;
+        if (next >= 3) {
+          submitQuiz(true);
+          return next;
+        }
+        setShowWarning(true);
+        return next;
+      });
+    };
+
+    window.addEventListener('blur', handleBlur);
+    return () => window.removeEventListener('blur', handleBlur);
+  }, [view]);
+
+  // 3. Timer logic
+  useEffect(() => {
+    if (view !== 'quiz' || timeLeft <= 0) return;
+    const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    if (timeLeft === 0) submitQuiz();
+    return () => clearInterval(timer);
+  }, [view, timeLeft]);
+
+  // 4. Fetch results for teacher
+  useEffect(() => {
+    if (view !== 'teacher' || !user) return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'results'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTeacherResults(data);
+    }, (err) => console.error(err));
+    return () => unsubscribe();
+  }, [view, user]);
+
+  const startQuiz = () => {
+    if (!studentName.trim()) return alert("Нэрээ оруулна уу");
+    setView('quiz');
+  };
+
+  const submitQuiz = async (forced = false) => {
+    if (!user) return;
+    let score = 0;
+    answers.forEach((ans, i) => {
+      if (ans === QUESTIONS[i].correct) score++;
+    });
+
+    const resultData = {
+      name: studentName,
+      score,
+      total: QUESTIONS.length,
+      percent: Math.round((score / QUESTIONS.length) * 100),
+      cheats: forced ? 3 : cheats,
+      timestamp: new Date().toISOString(),
+      forced
+    };
+
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'results'), resultData);
+      setView('result');
+    } catch (e) {
+      console.error(e);
+      setView('result'); // Still show results locally if firestore fails
+    }
+  };
+
+  const formatTime = (s) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  if (view === 'teacher') {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+        <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-800 p-6 text-white flex justify-between items-center">
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-blue-400" />
+              Багшийн хяналтын хэсэг
+            </h1>
+            <button onClick={() => setView('landing')} className="text-sm bg-slate-700 px-4 py-2 rounded-lg hover:bg-slate-600 transition">Гарах</button>
+          </div>
+          <div className="p-6 overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b-2 border-slate-100 text-slate-500 text-sm">
+                  <th className="p-4">Сурагчийн нэр</th>
+                  <th className="p-4">Оноо</th>
+                  <th className="p-4">Хувь</th>
+                  <th className="p-4">Зөрчил</th>
+                  <th className="p-4">Огноо</th>
+                  <th className="p-4">Төлөв</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teacherResults.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map((res) => (
+                  <tr key={res.id} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="p-4 font-medium text-slate-800">{res.name}</td>
+                    <td className="p-4">{res.score} / {res.total}</td>
+                    <td className="p-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${res.percent >= 80 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {res.percent}%
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`flex items-center gap-1 ${res.cheats > 0 ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                        <ShieldAlert className="w-4 h-4" /> {res.cheats}
+                      </span>
+                    </td>
+                    <td className="p-4 text-slate-500 text-xs">{new Date(res.timestamp).toLocaleString()}</td>
+                    <td className="p-4">
+                      {res.forced ? <span className="text-red-500 text-xs font-bold uppercase tracking-tighter">Хөөгдсөн</span> : <span className="text-green-500 text-xs font-bold uppercase tracking-tighter">Дуусгасан</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+      {/* Anti-cheat Overlay */}
+      {showWarning && (
+        <div className="fixed inset-0 z-50 bg-red-600 bg-opacity-95 flex flex-col items-center justify-center text-white p-6 text-center animate-pulse">
+          <ShieldAlert className="w-24 h-24 mb-6" />
+          <h2 className="text-4xl font-black mb-4 uppercase">Анхааруулга!</h2>
+          <p className="text-xl mb-8 max-w-md">Тест ажиллаж байхдаа өөр цонх руу шилжих хориотой. Дахиж шилжвэл тест автоматаар хаагдана.</p>
+          <button onClick={() => setShowWarning(false)} className="bg-white text-red-600 px-12 py-4 rounded-full font-black text-xl hover:scale-105 transition-transform">БУЦАХ</button>
+        </div>
+      )}
+
+      <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden relative border border-slate-200">
+        {view === 'landing' && (
+          <div className="p-8 md:p-12">
+            <div className="text-center mb-10">
+              <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg rotate-3">
+                <LogIn className="w-10 h-10 text-white" />
+              </div>
+              <h1 className="text-3xl font-black text-slate-800 mb-2">ГҮЙЦЭТГЭЛИЙН ҮНЭЛГЭЭ 2025</h1>
+              <p className="text-slate-500 uppercase tracking-widest text-sm font-bold">Орос хэл | 9-р анги | Хувилбар А</p>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Сурагчийн нэр</label>
+                <input 
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl focus:border-blue-500 focus:bg-white outline-none transition-all text-lg font-medium" 
+                  placeholder="Овог нэрээ оруулна уу..."
+                />
+              </div>
+              
+              <button onClick={startQuiz} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-bold text-xl shadow-xl shadow-blue-200 transition-all active:scale-[0.98]">
+                Тест эхлэх
+              </button>
+
+              <div className="pt-8 border-t border-slate-100 flex flex-col items-center">
+                <p className="text-xs text-slate-400 mb-4">Зөвхөн багш нэвтрэх хэсэг</p>
+                <div className="flex gap-2 w-full max-w-xs">
+                  <input 
+                    type="password" 
+                    placeholder="Нууц код"
+                    value={adminPass}
+                    onChange={(e) => setAdminPass(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-sm"
+                  />
+                  <button onClick={() => adminPass === 'admin123' ? setView('teacher') : alert('Нууц код буруу')} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold">Нэвтрэх</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'quiz' && (
+          <div className="flex flex-col h-full">
+            <div className="bg-blue-700 p-6 text-white flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="bg-blue-600 p-2 rounded-lg">
+                  <Timer className="w-6 h-6" />
+                </div>
                 <div>
-                    <h1 class="text-xl font-bold uppercase">Гүйцэтгэлийн үнэлгээ - 2025</h1>
-                    <p class="text-sm opacity-80">9-р анги | Орос хэл | Хувилбар А</p>
+                  <div className="text-2xl font-mono font-black">{formatTime(timeLeft)}</div>
+                  <div className="text-[10px] uppercase font-bold opacity-60">Үлдсэн хугацаа</div>
                 </div>
-                <div class="text-right">
-                    <div id="timer" class="text-2xl font-mono font-bold">40:00</div>
-                    <div id="cheats" class="text-xs text-red-300">Зөрчил: 0/3</div>
+              </div>
+              <div className="text-right">
+                <div className="flex items-center gap-1 text-red-300 font-bold">
+                  <ShieldAlert className="w-4 h-4" /> {cheats}/3
                 </div>
-            </div>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="w-full bg-gray-200 h-2">
-            <div id="progress" class="bg-yellow-400 h-2 transition-all duration-300" style="width: 0%"></div>
-        </div>
-
-        <div id="quiz-container" class="p-4 md:p-8">
-            <!-- Intro Screen -->
-            <div id="intro-screen">
-                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-                    <h2 class="font-bold text-blue-800 mb-2">САНАМЖ:</h2>
-                    <ul class="text-sm space-y-2 text-blue-900">
-                        <li>• Даалгаврыг 40 минутад гүйцэтгээрэй.</li>
-                        <li>• Өөр цонх, таб руу шилжихийг хориглоно (Шилжсэн тохиолдолд тест автоматаар хаагдана).</li>
-                        <li>• Даалгавар бүрээс зөвхөн нэг хариултыг сонгож тэмдэглээрэй.</li>
-                    </ul>
-                </div>
-                <div class="space-y-4">
-                    <input type="text" id="student-name" placeholder="Сурагчийн нэр" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                    <button onclick="startQuiz()" class="w-full bg-blue-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-700 shadow-lg">ТЕСТ ЭХЛЭХ</button>
-                </div>
+                <div className="text-[10px] uppercase font-bold opacity-60 tracking-widest">Зөрчил</div>
+              </div>
             </div>
 
-            <!-- Question Screen -->
-            <div id="question-area" class="hidden">
-                <div id="question-content" class="min-h-[300px]">
-                    <!-- Questions will be injected here -->
-                </div>
-                <div class="mt-10 flex justify-between items-center border-t pt-6">
-                    <button id="prev-btn" onclick="changeQuestion(-1)" class="px-6 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">ӨМНӨХ</button>
-                    <span id="question-num" class="text-gray-400 font-bold text-sm">1 / 25</span>
-                    <button id="next-btn" onclick="changeQuestion(1)" class="px-8 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">ДАРААХ</button>
-                </div>
+            <div className="w-full bg-slate-100 h-2">
+              <div className="bg-yellow-400 h-full transition-all duration-500" style={{ width: `${((currentQ + 1) / QUESTIONS.length) * 100}%` }}></div>
             </div>
 
-            <!-- Result Screen -->
-            <div id="result-screen" class="hidden">
-                <div class="text-center py-8">
-                    <h2 class="text-2xl font-bold mb-2">ТЕСТ ДҮҮСЛЭЭ</h2>
-                    <p id="result-name" class="text-gray-600 mb-6"></p>
-                    <div class="relative inline-block mb-8">
-                        <svg class="w-32 h-32">
-                            <circle class="text-gray-200" stroke-width="8" stroke="currentColor" fill="transparent" r="58" cx="64" cy="64"/>
-                            <circle id="result-circle" class="text-blue-600" stroke-width="8" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round" stroke="currentColor" fill="transparent" r="58" cx="64" cy="64" style="transition: stroke-dashoffset 1s ease-out;"/>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center font-bold text-2xl" id="score-percent">0%</div>
+            <div className="p-8 min-h-[400px]">
+              <div className="mb-8">
+                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider mb-4 inline-block">
+                  {QUESTIONS[currentQ].cat}
+                </span>
+                <h2 className="text-xl md:text-2xl font-bold text-slate-800 leading-snug">
+                  {QUESTIONS[currentQ].q}
+                </h2>
+              </div>
+
+              <div className="grid gap-3">
+                {QUESTIONS[currentQ].options.map((opt, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => {
+                      const newAns = [...answers];
+                      newAns[currentQ] = i;
+                      setAnswers(newAns);
+                    }}
+                    className={`group flex items-center p-4 border-2 rounded-2xl transition-all text-left ${answers[currentQ] === i ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+                  >
+                    <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-black mr-4 transition-colors ${answers[currentQ] === i ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                      {String.fromCharCode(65 + i)}
                     </div>
-                    <div id="grade-box" class="text-4xl font-black mb-4"></div>
-                    <p class="text-xl text-gray-700 mb-8" id="score-details"></p>
-                    <div id="analysis-grid" class="grid grid-cols-2 gap-4 text-left mb-8"></div>
-                    <button onclick="location.reload()" class="bg-blue-600 text-white px-10 py-3 rounded-full font-bold hover:bg-blue-700">ДАХИН ЭХЛЭХ</button>
-                </div>
+                    <span className={`flex-1 font-bold ${answers[currentQ] === i ? 'text-blue-900' : 'text-slate-600'}`}>{opt}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-        </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+              <button 
+                onClick={() => setCurrentQ(prev => Math.max(0, prev - 1))}
+                disabled={currentQ === 0}
+                className="flex items-center gap-2 text-slate-400 font-bold hover:text-slate-600 disabled:opacity-0 transition"
+              >
+                <ChevronLeft className="w-5 h-5" /> Өмнөх
+              </button>
+              <div className="text-slate-400 font-black text-sm uppercase tracking-widest">
+                {currentQ + 1} / {QUESTIONS.length}
+              </div>
+              {currentQ === QUESTIONS.length - 1 ? (
+                <button onClick={() => submitQuiz()} className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-100 transition">Дуусгах</button>
+              ) : (
+                <button 
+                  onClick={() => setCurrentQ(prev => Math.min(QUESTIONS.length - 1, prev + 1))}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 transition"
+                >
+                  Дараах <ChevronRight className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {view === 'result' && (
+          <div className="p-12 text-center">
+            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-12 h-12 text-green-600" />
+            </div>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">Амжилттай дууслаа!</h1>
+            <p className="text-slate-500 mb-8">{studentName} таны хариултыг амжилттай хүлээн авлаа. Багш дүнг тань системээс хянах болно.</p>
+            
+            <div className="bg-slate-50 rounded-3xl p-8 mb-8 inline-block min-w-[200px]">
+              <div className="text-5xl font-black text-blue-600 mb-1">
+                {Math.round((answers.filter((a,i) => a === QUESTIONS[i].correct).length / QUESTIONS.length) * 100)}%
+              </div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Таны оноо</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-10">
+              <div className="bg-slate-50 p-4 rounded-2xl flex flex-col items-center">
+                <CheckCircle2 className="w-5 h-5 text-green-500 mb-1" />
+                <span className="text-lg font-black text-slate-700">{answers.filter((a,i) => a === QUESTIONS[i].correct).length}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Зөв</span>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl flex flex-col items-center">
+                <XCircle className="w-5 h-5 text-red-500 mb-1" />
+                <span className="text-lg font-black text-slate-700">{QUESTIONS.length - answers.filter((a,i) => a === QUESTIONS[i].correct).length}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Буруу</span>
+              </div>
+            </div>
+
+            <button onClick={() => window.location.reload()} className="text-blue-600 font-bold hover:underline">Буцах</button>
+          </div>
+        )}
+      </div>
     </div>
-
-    <script>
-        const questions = [
-            { q: "Задание 1. Тулга написал письмо другу. Выберите правильный вариант: <br><i>«Я провожу каникулы ... деревне у дедушки».</i>", options: ["в", "на", "у", "к"], correct: 0, cat: "Хэлзүй" },
-            { q: "<i>«Каждый день я ... в озере».</i>", options: ["купаться", "купаюсь", "купается", "купаются"], correct: 1, cat: "Хэлзүй" },
-            { q: "Выберите антоним к слову <b>«Раннее»</b> (утро):", options: ["холодное", "позднее", "красивое", "тёплое"], correct: 1, cat: "Үгсийн сан" },
-            { q: "Задание 2. Выберите правильный вариант: <br> Мой брат хочет стать ...", options: ["врачом", "врач", "врача", "врачу"], correct: 0, cat: "Мэргэжил" },
-            { q: "Программист создаёт компьютерные ...", options: ["программы", "программа", "программу", "программ"], correct: 0, cat: "Мэргэжил" },
-            { q: "Задание 3. Соотнесите реплики: <br> — Покажите, пожалуйста, этот торт. <br> — ...", options: ["Вот, возьмите.", "Я не знаю.", "Это мой друг.", "Завтра будет праздник."], correct: 0, cat: "Харилцан яриа" },
-            { q: "— Где я могу заплатить? <br> — ...", options: ["В кассе.", "На улице.", "В библиотеке.", "В школе."], correct: 0, cat: "Харилцан яриа" },
-            { q: "В театре мы смотрели интересный ...", options: ["спектакль", "урок", "завтрак", "карандаш"], correct: 0, cat: "Театр" },
-            { q: "Кто играет главную ... в этом фильме?", options: ["роль", "кино", "театр", "сцену"], correct: 0, cat: "Кино" },
-            { q: "Лес даёт нам чистый ...", options: ["воздух", "воду", "хлеб", "машину"], correct: 0, cat: "Байгаль" },
-            { q: "Вода имеет большое ... для жизни человека.", options: ["значение", "место", "время", "дело"], correct: 0, cat: "Байгаль" },
-            { q: "Вчера папа ... поздно с работы.", options: ["пришёл", "пришла", "пришли", "прийти"], correct: 0, cat: "Хэлзүй" },
-            { q: "Мы ... классическую музыку.", options: ["слушаем", "слушаю", "слушаешь", "слушает"], correct: 0, cat: "Хэлзүй" },
-            { q: "<b>Текст:</b> «Дмитрий увлекается техникой. Он любит чинить старые приборы и собирать роботов». <br> Чем увлекается Дмитрий?", options: ["Спортом", "Техникой", "Музыкой", "Танцами"], correct: 1, cat: "Эх" },
-            { q: "<b>Текст:</b> «Она искала очки везде: на полке, на столе, в сумке. А они были на носу!» <br> Где были очки?", options: ["В сумке", "На столе", "На носу", "На полке"], correct: 2, cat: "Эх" },
-            { q: "Выберите правильное окончание: <br> Мы занимаемся русск... язык...", options: ["-им, -ом", "-ий, -ом", "-им, -о", "-ий, -о"], correct: 0, cat: "Хэлзүй" },
-            { q: "Найдите лишнее слово:", options: ["Учитель", "Врач", "Повар", "Школа"], correct: 3, cat: "Үгсийн сан" },
-            { q: "Какое сегодня число?", options: ["Двадцать второе мая", "В двадцать два мая", "Двадцать второго май", "Двадцать второй май"], correct: 0, cat: "Хэлзүй" },
-            { q: "Где вы были в воскресенье?", options: ["Мы были в парке.", "Мы идем в парк.", "Мы любим парк.", "Это красивый парк."], correct: 0, cat: "Хэлзүй" },
-            { q: "Найдите ошибку:", options: ["Новая фильм", "Новый фильм", "Интересный фильм", "Старый фильм"], correct: 0, cat: "Хэлзүй" },
-            // ХОЁРДУГААР ХЭСЭГ: НӨХӨХ
-            { q: "<i>Восстановите текст:</i> «Мой дедушка ... (21) на пенсии. Он ... (22) в деревне».", options: ["находится / живёт", "есть / работает", "был / жил", "учится / гуляет"], correct: 0, cat: "Нөхөх" },
-            { q: "«Он очень ... (23) трудиться».", options: ["любит", "любят", "люблю", "любишь"], correct: 0, cat: "Нөхөх" },
-            { q: "«У него ... (24) большой сад».", options: ["есть", "был", "будет", "были"], correct: 0, cat: "Нөхөх" },
-            { q: "«Мы часто ... (25) к нему в гости».", options: ["ездим", "едим", "идем", "едем"], correct: 0, cat: "Нөхөх" },
-            { q: "Как называется столица России?", options: ["Москва", "Санкт-Петербург", "Иркутск", "Улан-Удэ"], correct: 0, cat: "Соёл" }
-        ];
-
-        let currentIdx = 0;
-        let userAnswers = new Array(questions.length).fill(null);
-        let timeLeft = 2400; // 40 mins
-        let timerInterval;
-        let cheatCount = 0;
-        let quizActive = false;
-
-        // Anti-cheat logic
-        window.addEventListener('blur', () => {
-            if (!quizActive) return;
-            cheatCount++;
-            document.getElementById('cheats').innerText = `Зөрчил: ${cheatCount}/3`;
-            if (cheatCount >= 3) {
-                forceFinish();
-            } else {
-                document.getElementById('warning-overlay').style.display = 'flex';
-            }
-        });
-
-        function resumeQuiz() {
-            document.getElementById('warning-overlay').style.display = 'none';
-        }
-
-        function startQuiz() {
-            const name = document.getElementById('student-name').value.trim();
-            if (!name) {
-                alert('Нэрээ оруулна уу!');
-                return;
-            }
-            quizActive = true;
-            document.getElementById('intro-screen').classList.add('hidden');
-            document.getElementById('question-area').classList.remove('hidden');
-            startTimer();
-            renderQuestion();
-        }
-
-        function startTimer() {
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                let m = Math.floor(timeLeft / 60);
-                let s = timeLeft % 60;
-                document.getElementById('timer').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                if (timeLeft <= 0) forceFinish();
-            }, 1000);
-        }
-
-        function renderQuestion() {
-            const q = questions[currentIdx];
-            document.getElementById('question-num').innerText = `${currentIdx + 1} / ${questions.length}`;
-            let html = `
-                <div class="mb-6">
-                    <span class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-md mb-3 uppercase tracking-wider">${q.cat}</span>
-                    <h3 class="text-xl text-gray-800 leading-relaxed">${q.q}</h3>
-                </div>
-                <div class="grid gap-3">
-            `;
-            q.options.forEach((opt, i) => {
-                const isSelected = userAnswers[currentIdx] === i;
-                html += `
-                    <button onclick="selectOption(${i})" class="option-card w-full text-left p-4 border-2 rounded-xl transition-all flex items-center ${isSelected ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}">
-                        <span class="w-10 h-10 flex items-center justify-center rounded-full border-2 mr-4 font-bold ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 text-gray-400'}">
-                            ${String.fromCharCode(65 + i)}
-                        </span>
-                        <span class="${isSelected ? 'text-blue-900 font-bold' : 'text-gray-700'}">${opt}</span>
-                    </button>
-                `;
-            });
-            html += `</div>`;
-            document.getElementById('question-content').innerHTML = html;
-            document.getElementById('progress').style.width = `${((currentIdx + 1) / questions.length) * 100}%`;
-            document.getElementById('prev-btn').style.visibility = currentIdx === 0 ? 'hidden' : 'visible';
-            document.getElementById('next-btn').innerText = currentIdx === questions.length - 1 ? 'ДУУСГАХ' : 'ДААРААХ';
-        }
-
-        function selectOption(i) {
-            userAnswers[currentIdx] = i;
-            renderQuestion();
-        }
-
-        function changeQuestion(dir) {
-            if (dir === 1 && currentIdx === questions.length - 1) {
-                finishQuiz();
-            } else {
-                currentIdx += dir;
-                renderQuestion();
-            }
-        }
-
-        function forceFinish() {
-            alert('Хугацаа дууссан эсвэл зөрчил гаргасан тул тест зогслоо.');
-            finishQuiz();
-        }
-
-        function finishQuiz() {
-            quizActive = false;
-            clearInterval(timerInterval);
-            document.getElementById('question-area').classList.add('hidden');
-            document.getElementById('result-screen').classList.remove('hidden');
-            document.getElementById('result-name').innerText = document.getElementById('student-name').value;
-            
-            let score = 0;
-            userAnswers.forEach((ans, i) => { if (ans === questions[i].correct) score++; });
-            
-            const percent = Math.round((score / questions.length) * 100);
-            document.getElementById('score-percent').innerText = `${percent}%`;
-            document.getElementById('score-details').innerText = `Нийт 25 даалгавраас ${score} зөв хариуллаа.`;
-            
-            const circle = document.getElementById('result-circle');
-            const offset = 364.4 - (364.4 * percent / 100);
-            circle.style.strokeDashoffset = offset;
-
-            let grade = '', color = '';
-            if (percent >= 90) { grade = 'A'; color = 'text-green-500'; }
-            else if (percent >= 80) { grade = 'B'; color = 'text-blue-500'; }
-            else if (percent >= 60) { grade = 'C'; color = 'text-yellow-500'; }
-            else if (percent >= 40) { grade = 'D'; color = 'text-orange-500'; }
-            else { grade = 'F'; color = 'text-red-500'; }
-            
-            const gradeBox = document.getElementById('grade-box');
-            gradeBox.innerText = grade;
-            gradeBox.className = `text-6xl font-black mb-4 ${color}`;
-
-            // Category analysis
-            const cats = {};
-            questions.forEach((q, i) => {
-                if (!cats[q.cat]) cats[q.cat] = { c: 0, t: 0 };
-                cats[q.cat].t++;
-                if (userAnswers[i] === q.correct) cats[q.cat].c++;
-            });
-
-            let analysisHtml = '';
-            for (let c in cats) {
-                const p = Math.round(cats[c].c / cats[c].t * 100);
-                analysisHtml += `
-                    <div class="bg-gray-50 p-3 rounded-lg">
-                        <div class="flex justify-between text-xs font-bold mb-1">
-                            <span>${c}</span>
-                            <span>${p}%</span>
-                        </div>
-                        <div class="w-full bg-gray-200 h-1 rounded-full">
-                            <div class="bg-blue-600 h-1 rounded-full" style="width: ${p}%"></div>
-                        </div>
-                    </div>
-                `;
-            }
-            document.getElementById('analysis-grid').innerHTML = analysisHtml;
-        }
-    </script>
-</body>
-</html>
+  );
+}
