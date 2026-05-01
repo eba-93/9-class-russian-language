@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Гүйцэтгэлийн үнэлгээ - 9-р анги (Орос хэл)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+        body { font-family: 'Roboto', sans-serif; background-color: #f3f4f6; user-select: none; }
+        .option-card:hover { background-color: #f0f7ff; transform: translateY(-1px); }
+        .correct { background-color: #d1fae5 !important; border-color: #10b981 !important; }
+        .incorrect { background-color: #fee2e2 !important; border-color: #ef4444 !important; }
+        .modal { backdrop-filter: blur(5px); }
+        #warning-overlay { display: none; }
+    </style>
+</head>
+<body class="p-2 md:p-8">
+    <div id="app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden relative">
+        <!-- Anti-cheat Warning Overlay -->
+        <div id="warning-overlay" class="fixed inset-0 bg-red-600 bg-opacity-90 z-50 flex flex-col items-center justify-center text-white p-6 text-center">
+            <h2 class="text-4xl font-bold mb-4">АНХААРУУЛГА!</h2>
+            <p class="text-xl mb-6">Тест ажиллаж байх явцад өөр цонх руу шилжих хориотой. Таны үйлдлийг тэмдэглэж байна.</p>
+            <button onclick="resumeQuiz()" class="bg-white text-red-600 px-8 py-3 rounded-full font-bold">БУЦАХ</button>
+        </div>
+
+        <!-- Header -->
+        <div class="bg-blue-700 p-6 text-white">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold uppercase">Гүйцэтгэлийн үнэлгээ - 2025</h1>
+                    <p class="text-sm opacity-80">9-р анги | Орос хэл | Хувилбар А</p>
+                </div>
+                <div class="text-right">
+                    <div id="timer" class="text-2xl font-mono font-bold">40:00</div>
+                    <div id="cheats" class="text-xs text-red-300">Зөрчил: 0/3</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-gray-200 h-2">
+            <div id="progress" class="bg-yellow-400 h-2 transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <div id="quiz-container" class="p-4 md:p-8">
+            <!-- Intro Screen -->
+            <div id="intro-screen">
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                    <h2 class="font-bold text-blue-800 mb-2">САНАМЖ:</h2>
+                    <ul class="text-sm space-y-2 text-blue-900">
+                        <li>• Даалгаврыг 40 минутад гүйцэтгээрэй.</li>
+                        <li>• Өөр цонх, таб руу шилжихийг хориглоно (Шилжсэн тохиолдолд тест автоматаар хаагдана).</li>
+                        <li>• Даалгавар бүрээс зөвхөн нэг хариултыг сонгож тэмдэглээрэй.</li>
+                    </ul>
+                </div>
+                <div class="space-y-4">
+                    <input type="text" id="student-name" placeholder="Сурагчийн нэр" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <button onclick="startQuiz()" class="w-full bg-blue-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-blue-700 shadow-lg">ТЕСТ ЭХЛЭХ</button>
+                </div>
+            </div>
+
+            <!-- Question Screen -->
+            <div id="question-area" class="hidden">
+                <div id="question-content" class="min-h-[300px]">
+                    <!-- Questions will be injected here -->
+                </div>
+                <div class="mt-10 flex justify-between items-center border-t pt-6">
+                    <button id="prev-btn" onclick="changeQuestion(-1)" class="px-6 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded-lg transition">ӨМНӨХ</button>
+                    <span id="question-num" class="text-gray-400 font-bold text-sm">1 / 25</span>
+                    <button id="next-btn" onclick="changeQuestion(1)" class="px-8 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">ДАРААХ</button>
+                </div>
+            </div>
+
+            <!-- Result Screen -->
+            <div id="result-screen" class="hidden">
+                <div class="text-center py-8">
+                    <h2 class="text-2xl font-bold mb-2">ТЕСТ ДҮҮСЛЭЭ</h2>
+                    <p id="result-name" class="text-gray-600 mb-6"></p>
+                    <div class="relative inline-block mb-8">
+                        <svg class="w-32 h-32">
+                            <circle class="text-gray-200" stroke-width="8" stroke="currentColor" fill="transparent" r="58" cx="64" cy="64"/>
+                            <circle id="result-circle" class="text-blue-600" stroke-width="8" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round" stroke="currentColor" fill="transparent" r="58" cx="64" cy="64" style="transition: stroke-dashoffset 1s ease-out;"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center font-bold text-2xl" id="score-percent">0%</div>
+                    </div>
+                    <div id="grade-box" class="text-4xl font-black mb-4"></div>
+                    <p class="text-xl text-gray-700 mb-8" id="score-details"></p>
+                    <div id="analysis-grid" class="grid grid-cols-2 gap-4 text-left mb-8"></div>
+                    <button onclick="location.reload()" class="bg-blue-600 text-white px-10 py-3 rounded-full font-bold hover:bg-blue-700">ДАХИН ЭХЛЭХ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const questions = [
+            { q: "Задание 1. Тулга написал письмо другу. Выберите правильный вариант: <br><i>«Я провожу каникулы ... деревне у дедушки».</i>", options: ["в", "на", "у", "к"], correct: 0, cat: "Хэлзүй" },
+            { q: "<i>«Каждый день я ... в озере».</i>", options: ["купаться", "купаюсь", "купается", "купаются"], correct: 1, cat: "Хэлзүй" },
+            { q: "Выберите антоним к слову <b>«Раннее»</b> (утро):", options: ["холодное", "позднее", "красивое", "тёплое"], correct: 1, cat: "Үгсийн сан" },
+            { q: "Задание 2. Выберите правильный вариант: <br> Мой брат хочет стать ...", options: ["врачом", "врач", "врача", "врачу"], correct: 0, cat: "Мэргэжил" },
+            { q: "Программист создаёт компьютерные ...", options: ["программы", "программа", "программу", "программ"], correct: 0, cat: "Мэргэжил" },
+            { q: "Задание 3. Соотнесите реплики: <br> — Покажите, пожалуйста, этот торт. <br> — ...", options: ["Вот, возьмите.", "Я не знаю.", "Это мой друг.", "Завтра будет праздник."], correct: 0, cat: "Харилцан яриа" },
+            { q: "— Где я могу заплатить? <br> — ...", options: ["В кассе.", "На улице.", "В библиотеке.", "В школе."], correct: 0, cat: "Харилцан яриа" },
+            { q: "В театре мы смотрели интересный ...", options: ["спектакль", "урок", "завтрак", "карандаш"], correct: 0, cat: "Театр" },
+            { q: "Кто играет главную ... в этом фильме?", options: ["роль", "кино", "театр", "сцену"], correct: 0, cat: "Кино" },
+            { q: "Лес даёт нам чистый ...", options: ["воздух", "воду", "хлеб", "машину"], correct: 0, cat: "Байгаль" },
+            { q: "Вода имеет большое ... для жизни человека.", options: ["значение", "место", "время", "дело"], correct: 0, cat: "Байгаль" },
+            { q: "Вчера папа ... поздно с работы.", options: ["пришёл", "пришла", "пришли", "прийти"], correct: 0, cat: "Хэлзүй" },
+            { q: "Мы ... классическую музыку.", options: ["слушаем", "слушаю", "слушаешь", "слушает"], correct: 0, cat: "Хэлзүй" },
+            { q: "<b>Текст:</b> «Дмитрий увлекается техникой. Он любит чинить старые приборы и собирать роботов». <br> Чем увлекается Дмитрий?", options: ["Спортом", "Техникой", "Музыкой", "Танцами"], correct: 1, cat: "Эх" },
+            { q: "<b>Текст:</b> «Она искала очки везде: на полке, на столе, в сумке. А они были на носу!» <br> Где были очки?", options: ["В сумке", "На столе", "На носу", "На полке"], correct: 2, cat: "Эх" },
+            { q: "Выберите правильное окончание: <br> Мы занимаемся русск... язык...", options: ["-им, -ом", "-ий, -ом", "-им, -о", "-ий, -о"], correct: 0, cat: "Хэлзүй" },
+            { q: "Найдите лишнее слово:", options: ["Учитель", "Врач", "Повар", "Школа"], correct: 3, cat: "Үгсийн сан" },
+            { q: "Какое сегодня число?", options: ["Двадцать второе мая", "В двадцать два мая", "Двадцать второго май", "Двадцать второй май"], correct: 0, cat: "Хэлзүй" },
+            { q: "Где вы были в воскресенье?", options: ["Мы были в парке.", "Мы идем в парк.", "Мы любим парк.", "Это красивый парк."], correct: 0, cat: "Хэлзүй" },
+            { q: "Найдите ошибку:", options: ["Новая фильм", "Новый фильм", "Интересный фильм", "Старый фильм"], correct: 0, cat: "Хэлзүй" },
+            // ХОЁРДУГААР ХЭСЭГ: НӨХӨХ
+            { q: "<i>Восстановите текст:</i> «Мой дедушка ... (21) на пенсии. Он ... (22) в деревне».", options: ["находится / живёт", "есть / работает", "был / жил", "учится / гуляет"], correct: 0, cat: "Нөхөх" },
+            { q: "«Он очень ... (23) трудиться».", options: ["любит", "любят", "люблю", "любишь"], correct: 0, cat: "Нөхөх" },
+            { q: "«У него ... (24) большой сад».", options: ["есть", "был", "будет", "были"], correct: 0, cat: "Нөхөх" },
+            { q: "«Мы часто ... (25) к нему в гости».", options: ["ездим", "едим", "идем", "едем"], correct: 0, cat: "Нөхөх" },
+            { q: "Как называется столица России?", options: ["Москва", "Санкт-Петербург", "Иркутск", "Улан-Удэ"], correct: 0, cat: "Соёл" }
+        ];
+
+        let currentIdx = 0;
+        let userAnswers = new Array(questions.length).fill(null);
+        let timeLeft = 2400; // 40 mins
+        let timerInterval;
+        let cheatCount = 0;
+        let quizActive = false;
+
+        // Anti-cheat logic
+        window.addEventListener('blur', () => {
+            if (!quizActive) return;
+            cheatCount++;
+            document.getElementById('cheats').innerText = `Зөрчил: ${cheatCount}/3`;
+            if (cheatCount >= 3) {
+                forceFinish();
+            } else {
+                document.getElementById('warning-overlay').style.display = 'flex';
+            }
+        });
+
+        function resumeQuiz() {
+            document.getElementById('warning-overlay').style.display = 'none';
+        }
+
+        function startQuiz() {
+            const name = document.getElementById('student-name').value.trim();
+            if (!name) {
+                alert('Нэрээ оруулна уу!');
+                return;
+            }
+            quizActive = true;
+            document.getElementById('intro-screen').classList.add('hidden');
+            document.getElementById('question-area').classList.remove('hidden');
+            startTimer();
+            renderQuestion();
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                let m = Math.floor(timeLeft / 60);
+                let s = timeLeft % 60;
+                document.getElementById('timer').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                if (timeLeft <= 0) forceFinish();
+            }, 1000);
+        }
+
+        function renderQuestion() {
+            const q = questions[currentIdx];
+            document.getElementById('question-num').innerText = `${currentIdx + 1} / ${questions.length}`;
+            let html = `
+                <div class="mb-6">
+                    <span class="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-md mb-3 uppercase tracking-wider">${q.cat}</span>
+                    <h3 class="text-xl text-gray-800 leading-relaxed">${q.q}</h3>
+                </div>
+                <div class="grid gap-3">
+            `;
+            q.options.forEach((opt, i) => {
+                const isSelected = userAnswers[currentIdx] === i;
+                html += `
+                    <button onclick="selectOption(${i})" class="option-card w-full text-left p-4 border-2 rounded-xl transition-all flex items-center ${isSelected ? 'border-blue-600 bg-blue-50' : 'border-gray-100'}">
+                        <span class="w-10 h-10 flex items-center justify-center rounded-full border-2 mr-4 font-bold ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 text-gray-400'}">
+                            ${String.fromCharCode(65 + i)}
+                        </span>
+                        <span class="${isSelected ? 'text-blue-900 font-bold' : 'text-gray-700'}">${opt}</span>
+                    </button>
+                `;
+            });
+            html += `</div>`;
+            document.getElementById('question-content').innerHTML = html;
+            document.getElementById('progress').style.width = `${((currentIdx + 1) / questions.length) * 100}%`;
+            document.getElementById('prev-btn').style.visibility = currentIdx === 0 ? 'hidden' : 'visible';
+            document.getElementById('next-btn').innerText = currentIdx === questions.length - 1 ? 'ДУУСГАХ' : 'ДААРААХ';
+        }
+
+        function selectOption(i) {
+            userAnswers[currentIdx] = i;
+            renderQuestion();
+        }
+
+        function changeQuestion(dir) {
+            if (dir === 1 && currentIdx === questions.length - 1) {
+                finishQuiz();
+            } else {
+                currentIdx += dir;
+                renderQuestion();
+            }
+        }
+
+        function forceFinish() {
+            alert('Хугацаа дууссан эсвэл зөрчил гаргасан тул тест зогслоо.');
+            finishQuiz();
+        }
+
+        function finishQuiz() {
+            quizActive = false;
+            clearInterval(timerInterval);
+            document.getElementById('question-area').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+            document.getElementById('result-name').innerText = document.getElementById('student-name').value;
+            
+            let score = 0;
+            userAnswers.forEach((ans, i) => { if (ans === questions[i].correct) score++; });
+            
+            const percent = Math.round((score / questions.length) * 100);
+            document.getElementById('score-percent').innerText = `${percent}%`;
+            document.getElementById('score-details').innerText = `Нийт 25 даалгавраас ${score} зөв хариуллаа.`;
+            
+            const circle = document.getElementById('result-circle');
+            const offset = 364.4 - (364.4 * percent / 100);
+            circle.style.strokeDashoffset = offset;
+
+            let grade = '', color = '';
+            if (percent >= 90) { grade = 'A'; color = 'text-green-500'; }
+            else if (percent >= 80) { grade = 'B'; color = 'text-blue-500'; }
+            else if (percent >= 60) { grade = 'C'; color = 'text-yellow-500'; }
+            else if (percent >= 40) { grade = 'D'; color = 'text-orange-500'; }
+            else { grade = 'F'; color = 'text-red-500'; }
+            
+            const gradeBox = document.getElementById('grade-box');
+            gradeBox.innerText = grade;
+            gradeBox.className = `text-6xl font-black mb-4 ${color}`;
+
+            // Category analysis
+            const cats = {};
+            questions.forEach((q, i) => {
+                if (!cats[q.cat]) cats[q.cat] = { c: 0, t: 0 };
+                cats[q.cat].t++;
+                if (userAnswers[i] === q.correct) cats[q.cat].c++;
+            });
+
+            let analysisHtml = '';
+            for (let c in cats) {
+                const p = Math.round(cats[c].c / cats[c].t * 100);
+                analysisHtml += `
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span>${c}</span>
+                            <span>${p}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 h-1 rounded-full">
+                            <div class="bg-blue-600 h-1 rounded-full" style="width: ${p}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('analysis-grid').innerHTML = analysisHtml;
+        }
+    </script>
+</body>
+</html>
